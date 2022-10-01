@@ -15,7 +15,7 @@ fn main() {
     let mut dragon_view = DragonView::default();
 
     let el = EventLoop::new();
-    let mut graphics_state = graphics::Graphics::setup(&el, (660, 720));
+    let mut graphics_state = graphics::Graphics::setup(&el, (680, 700));
     set_egui_visuals(&mut graphics_state.egui_state.ctx);
 
     let mut ui_state = UiState{ request_redraw: 1 };
@@ -150,6 +150,7 @@ fn central_panel(ctx: &mut Context, dragon_view: &mut DragonView) {
         });
 
         ui.add_space(20.0);
+        ui.colored_label(Color32::from_rgb(240, 240, 240), format!("defense: {}", dragon_view.current_enemy.get_enemy().defense));
         ui.colored_label(Color32::from_rgb(240, 240, 240), format!("xp: {}", dragon_view.current_enemy.get_enemy().xp));
     });
 }
