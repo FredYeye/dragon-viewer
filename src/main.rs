@@ -82,7 +82,7 @@ fn side_panel(ctx: &mut Context, dragon_view: &mut DragonView) {
     .resizable(false)
     .show(ctx, |ui| {
         egui::ScrollArea::vertical()
-        .max_height(670.0)
+        .max_height(660.0)
         .show(ui, |ui| {
             for enemy in dragon_view::enemy::Enemy::list() {
                 let name = enemy.get_enemy().name;
@@ -121,7 +121,7 @@ fn central_panel(ctx: &mut Context, dragon_view: &mut DragonView) {
     .frame(central_frame)
     .show(ctx, |ui| {
         egui::Grid::new("dmg_grid").show(ui, |ui| {
-            for (idx, (name, damage)) in dragon_view.damage_dealt().iter().enumerate() {
+            for (idx, (name, damage_list)) in dragon_view.damage_dealt().iter().enumerate() {
                 ui.colored_label(Color32::from_rgb(240, 240, 240), name);
 
                 let hp = match dragon_view.is_boss {
@@ -129,16 +129,16 @@ fn central_panel(ctx: &mut Context, dragon_view: &mut DragonView) {
                     false => 40,
                 };
 
-                for &level in damage {
-                    let color = if level < 1 {
+                for (damage, zero_damage) in damage_list.iter() {
+                    let color = if *zero_damage == true {
                         Color32::LIGHT_RED
-                    } else if level >= hp {
+                    } else if *damage >= hp {
                         Color32::LIGHT_GREEN
                     } else {
                         Color32::from_rgb(240, 240, 240)
                     };
 
-                    ui.colored_label(color, format!("{:3}", level.clamp(1, hp)));
+                    ui.colored_label(color, format!("{:3}", damage.clamp(&1, &hp)));
                 }
 
                 ui.end_row();

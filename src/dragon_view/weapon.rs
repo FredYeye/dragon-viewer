@@ -46,20 +46,16 @@ impl Weapon {
 
     pub fn damage(&self) -> Vec<u8> {
         match self {
-            Self::Sword => vec![15, 25, 35, 45, 55],
+            Self::Sword | Self::SwordTech | Self::HauzaTechSpin => vec![15, 25, 35, 45, 55],
             Self::Hauza => vec![20, 30, 40, 50, 60],
-
-            Self::SwordTech => vec![15, 25, 35, 45, 55],
-            Self::HauzaTechSpin => vec![15, 25, 35, 45, 55],
-            Self::HauzaTechNoBonus => vec![70],
-            Self::HauzaTech => vec![70],
+            Self::HauzaTechNoBonus | Self::HauzaTech => vec![70],
 
             Self::SerpentScale => vec![10],
             Self::Bomb => vec![50],
             Self::BowArrow => vec![30],
+
             Self::FireRing => vec![2, 3, 4],
-            Self::IceRing => vec![1, 2, 4],
-            Self::LightningRing => vec![1, 2, 4],
+            Self::IceRing | Self::LightningRing => vec![1, 2, 4],
         }
     }
 }

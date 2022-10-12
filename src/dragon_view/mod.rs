@@ -21,7 +21,7 @@ impl Default for DragonView {
 }
 
 impl DragonView {
-    pub fn damage_dealt(&self) -> Vec<(String, Vec<u8>)> {
+    pub fn damage_dealt(&self) -> Vec<(String, Vec<(u8, bool)>)> {
         let mut damage_dealt = Vec::new();
         let enemy = self.current_enemy.get_enemy();
 
@@ -38,7 +38,7 @@ impl DragonView {
                     };
 
                     for ring_multiplier in weapon.damage() {
-                        damage_vec.push(ring_multiplier * enemy.ring_damage[idx]);
+                        damage_vec.push((ring_multiplier * enemy.ring_damage[idx], false));
                     }
                 }
 
@@ -48,11 +48,18 @@ impl DragonView {
 
                         attack_power = attack_power.saturating_sub(enemy.defense);
 
+                        let mut zero_damage = false;
+
+                        if attack_power == 0 {
+                            attack_power = 1;
+                            zero_damage = true;
+                        }
+
                         if let Weapon::SwordTech | Weapon::HauzaTechSpin | Weapon::HauzaTech = weapon {
                             attack_power = attack_power.saturating_add(10);
                         }
 
-                        damage_vec.push(attack_power);
+                        damage_vec.push((attack_power, zero_damage));
                     }
                 }
             }
