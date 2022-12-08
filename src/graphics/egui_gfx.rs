@@ -3,11 +3,8 @@
 use std::{ptr, ffi::c_void};
 
 use egui::RawInput;
-use glutin::{PossiblyCurrent, ContextWrapper};
 
 pub struct EguiState {
-    pub windowed_context: ContextWrapper<PossiblyCurrent, glutin::window::Window>,
-
     pub ctx: egui::Context,
     pub pos_in_points: Option<egui::Pos2>,
     pub raw_input: RawInput,
@@ -171,7 +168,7 @@ pub fn update_textures(tex_set: Vec<(egui::TextureId, egui::epaint::ImageDelta)>
 
             egui::ImageData::Font(image) => {
                 let gamma = 1.0;
-                image.srgba_pixels(gamma).map(|color| color.to_tuple()).collect()
+                image.srgba_pixels(Some(gamma)).map(|color| color.to_tuple()).collect()
             }
         };
 

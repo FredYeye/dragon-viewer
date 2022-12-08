@@ -1,7 +1,9 @@
 use std::{ffi::CString, ptr, str::from_utf8};
 
 use egui::Modifiers;
-use glutin::{event::{Event, WindowEvent, ElementState, VirtualKeyCode}, event_loop::ControlFlow};
+use glutin::{prelude::{GlConfig, GlDisplay, NotCurrentGlContextSurfaceAccessor}, display::GetGlDisplay, surface::{SurfaceAttributesBuilder, Surface, WindowSurface, GlSurface}, context::PossiblyCurrentContext};
+use raw_window_handle::HasRawWindowHandle;
+use winit::{event::{Event, WindowEvent, ElementState, VirtualKeyCode}, event_loop::ControlFlow};
 
 use crate::UiState;
 
@@ -9,20 +11,64 @@ use self::egui_gfx::*;
 
 mod egui_gfx;
 
+pub struct GlutinState {
+    pub window: winit::window::Window,
+    pub gl_ctx: PossiblyCurrentContext,
+    pub gl_display: glutin::display::Display,
+    pub gl_surface: Surface<WindowSurface>,
+}
+
 pub struct Graphics {
+    pub glutin_state: GlutinState,
     pub egui_state: EguiState,
 }
 
 impl Graphics {
-    pub fn setup(el: &glutin::event_loop::EventLoop<()>, window_size: (u32, u32)) -> Self {
-        let wb = glutin::window::WindowBuilder::new()
-        .with_inner_size(glutin::dpi::LogicalSize::new(window_size.0, window_size.1))
+    pub fn setup(el: &winit::event_loop::EventLoop<()>, window_size: (u32, u32)) -> Self {
+        let wb = winit::window::WindowBuilder::new()
+        .with_inner_size(winit::dpi::LogicalSize::new(window_size.0, window_size.1))
         .with_title("Dragon Viewer");
 
-        let windowed_context = glutin::ContextBuilder::new().build_windowed(wb, &el).unwrap();
-        let windowed_context = unsafe{windowed_context.make_current().unwrap()};
+        let (window, gl_config) = glutin_winit::DisplayBuilder::new()
+        .with_window_builder(Some(wb))
+        .build(&el, <_>::default(), |configs| {
+            configs
+                .filter(|c| c.srgb_capable())
+                .max_by_key(|c| c.num_samples())
+                .unwrap()
+        }).unwrap();
 
-        gl::load_with(|symbol| windowed_context.get_proc_address(symbol));
+        let window = window.unwrap();
+        let raw_window_handle = window.raw_window_handle();
+        let gl_display = gl_config.display();
+
+        let context_attributes = glutin::context::ContextAttributesBuilder::new()
+            .with_profile(glutin::context::GlProfile::Core)
+            .with_context_api(glutin::context::ContextApi::OpenGl(Some(
+                glutin::context::Version::new(4, 5),
+            )))
+            .build(Some(raw_window_handle));
+
+        let (gl_surface, gl_ctx) = {
+            let attrs = SurfaceAttributesBuilder::<glutin::surface::WindowSurface>::new().build(
+                raw_window_handle,
+                std::num::NonZeroU32::new(window_size.0).unwrap(),
+                std::num::NonZeroU32::new(window_size.1).unwrap(),
+            );
+
+            let surface = unsafe { match gl_display.create_window_surface(&gl_config, &attrs) {
+                Ok(o) => o,
+                Err(_) => todo!("omg"),
+            }};
+
+            let context = unsafe { match gl_display.create_context(&gl_config, &context_attributes) {
+                Ok(o) => o,
+                Err(_) => todo!("omg"),
+            }}.make_current(&surface).unwrap();
+            (surface, context)
+        };
+
+        gl::load_with(|symbol| (gl_display.get_proc_address(&CString::new(symbol).unwrap()) as _));
 
         unsafe {
             gl::Enable(gl::BLEND);
@@ -36,8 +82,15 @@ impl Graphics {
         let frag_e = include_str!("shader_egui.frag");
 
         Self {
+            glutin_state: GlutinState {
+                window: window,
+                gl_ctx: gl_ctx,
+                gl_display: gl_display,
+                gl_surface: gl_surface,
+            },
+
             egui_state: EguiState{
-                windowed_context: windowed_context,
+                // windowed_context: windowed_context,
                 ctx: egui::Context::default(),
                 pos_in_points: None,
                 raw_input: egui::RawInput::default(),
@@ -59,7 +112,7 @@ impl Graphics {
 
         paint_egui(&mut self.egui_state);
 
-        self.egui_state.windowed_context.swap_buffers().unwrap();
+        self.glutin_state.gl_surface.swap_buffers(&self.glutin_state.gl_ctx).unwrap();
     }
 }
 
@@ -106,15 +159,15 @@ fn compile_shader(source: &str, shader_type: u32) -> u32 {
     }
 }
 
-pub fn event_handling(event: Event<()>, control_flow: &mut ControlFlow, egui_state: &mut EguiState, ui_state: &mut UiState) {
+pub fn event_handling(event: Event<()>, control_flow: &mut ControlFlow, graphics_state: &mut Graphics, ui_state: &mut UiState) {
     match event {
         Event::LoopDestroyed => {}
 
         Event::WindowEvent{event, ..} => {
             match event {
                 WindowEvent::ReceivedCharacter(ch) => {
-                    if is_printable_char(ch) && !egui_state.raw_input.modifiers.ctrl {
-                        egui_state.raw_input.events.push(egui::Event::Text(ch.to_string()));
+                    if is_printable_char(ch) && !graphics_state.egui_state.raw_input.modifiers.ctrl {
+                        graphics_state.egui_state.raw_input.events.push(egui::Event::Text(ch.to_string()));
                     }
                 }
 
@@ -125,23 +178,23 @@ pub fn event_handling(event: Event<()>, control_flow: &mut ControlFlow, egui_sta
                         let pressed = input.state == ElementState::Pressed;
 
                         if matches!(keycode, VirtualKeyCode::LAlt | VirtualKeyCode::RAlt) {
-                            egui_state.raw_input.modifiers.alt = pressed;
+                            graphics_state.egui_state.raw_input.modifiers.alt = pressed;
                         }
 
                         if matches!(keycode, VirtualKeyCode::LControl | VirtualKeyCode::RControl) {
-                            egui_state.raw_input.modifiers.ctrl = pressed;
+                            graphics_state.egui_state.raw_input.modifiers.ctrl = pressed;
                         }
 
                         if matches!(keycode, VirtualKeyCode::LShift | VirtualKeyCode::RShift) {
-                            egui_state.raw_input.modifiers.shift = pressed;
+                            graphics_state.egui_state.raw_input.modifiers.shift = pressed;
                         }
 
                         if let Some(key) = translate_virtual_key_code(keycode) {
-                            egui_state.raw_input.events.push(
+                            graphics_state.egui_state.raw_input.events.push(
                                 egui::Event::Key{
                                     key,
                                     pressed,
-                                    modifiers: egui_state.raw_input.modifiers,
+                                    modifiers: graphics_state.egui_state.raw_input.modifiers,
                                 }
                             );
                         }
@@ -159,29 +212,29 @@ pub fn event_handling(event: Event<()>, control_flow: &mut ControlFlow, egui_sta
                         position.x as f32 / 1.0,
                         position.y as f32 / 1.0,
                     );
-                    egui_state.pos_in_points = Some(pos_in_points_temp);
+                    graphics_state.egui_state.pos_in_points = Some(pos_in_points_temp);
 
-                    egui_state.raw_input.events.push(egui::Event::PointerMoved(pos_in_points_temp));
+                    graphics_state.egui_state.raw_input.events.push(egui::Event::PointerMoved(pos_in_points_temp));
                 }
 
                 WindowEvent::MouseInput{state, button, ..} => {
                     ui_state.request_redraw = 2;
 
-                    if let Some(pos_in_points_temp) = egui_state.pos_in_points {
+                    if let Some(pos_in_points_temp) = graphics_state.egui_state.pos_in_points {
                         if let Some(button) = match button {
-                            glutin::event::MouseButton::Left => Some(egui::PointerButton::Primary),
-                            glutin::event::MouseButton::Right => Some(egui::PointerButton::Secondary),
-                            glutin::event::MouseButton::Middle => Some(egui::PointerButton::Middle),
+                            winit::event::MouseButton::Left => Some(egui::PointerButton::Primary),
+                            winit::event::MouseButton::Right => Some(egui::PointerButton::Secondary),
+                            winit::event::MouseButton::Middle => Some(egui::PointerButton::Middle),
                             _ => None,
                         }
                         {
-                            egui_state.raw_input.events.push(
+                            graphics_state.egui_state.raw_input.events.push(
                                 egui::Event::PointerButton{
                                     pos: pos_in_points_temp,
                                     button,
                                     pressed: match state {
-                                        glutin::event::ElementState::Pressed => true,
-                                        glutin::event::ElementState::Released => false,
+                                        winit::event::ElementState::Pressed => true,
+                                        winit::event::ElementState::Released => false,
                                     },
                                     modifiers: Modifiers::default(),
                                 }
@@ -192,8 +245,8 @@ pub fn event_handling(event: Event<()>, control_flow: &mut ControlFlow, egui_sta
 
                 WindowEvent::MouseWheel {delta, ..} => {
                     ui_state.request_redraw = 2;
-                    if let glutin::event::MouseScrollDelta::LineDelta(_, y) = delta {
-                        egui_state.raw_input.events.push(
+                    if let winit::event::MouseScrollDelta::LineDelta(_, y) = delta {
+                        graphics_state.egui_state.raw_input.events.push(
                             egui::Event::Scroll(egui::vec2(0.0, y * 35.0))
                         );
                     }
@@ -202,12 +255,16 @@ pub fn event_handling(event: Event<()>, control_flow: &mut ControlFlow, egui_sta
                 WindowEvent::Resized(physical_size) => {
                     ui_state.request_redraw = 2;
 
-                    egui_state.windowed_context.resize(physical_size);
-                    egui_state.window_size = (physical_size.width, physical_size.height);
+                    graphics_state.glutin_state.gl_surface.resize(
+                        &graphics_state.glutin_state.gl_ctx,
+                        std::num::NonZeroU32::new(physical_size.width).unwrap(),
+                        std::num::NonZeroU32::new(physical_size.width).unwrap(),
+                    );
+                    graphics_state.egui_state.window_size = (physical_size.width, physical_size.height);
 
                     unsafe {
                         gl::Viewport(0, 0, physical_size.width as i32, physical_size.height as i32);
-                        gl::ProgramUniform2f(egui_state.shader, 3, physical_size.width as f32, physical_size.height as f32);
+                        gl::ProgramUniform2f(graphics_state.egui_state.shader, 3, physical_size.width as f32, physical_size.height as f32);
                     };
                 }
 

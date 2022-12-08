@@ -1,11 +1,11 @@
 #![windows_subsystem = "windows"]
 
 mod dragon_view;
-use dragon_view::DragonView;
-
-use egui::{Context, Color32, TextStyle, FontId};
-use glutin::event_loop::{EventLoop, ControlFlow};
 mod graphics;
+
+use dragon_view::DragonView;
+use egui::{Context, Color32, TextStyle, FontId};
+use winit::event_loop::{EventLoop, ControlFlow};
 
 pub struct UiState {
     request_redraw: i8, //draw 2 frames per request to fix some things not getting redrawn
@@ -15,7 +15,7 @@ fn main() {
     let mut dragon_view = DragonView::default();
 
     let el = EventLoop::new();
-    let mut graphics_state = graphics::Graphics::setup(&el, (680, 700));
+    let mut graphics_state = graphics::Graphics::setup(&el, (720, 600));
     set_egui_visuals(&mut graphics_state.egui_state.ctx);
 
     let mut ui_state = UiState{ request_redraw: 1 };
@@ -23,7 +23,7 @@ fn main() {
     el.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::WaitUntil(std::time::Instant::now() + std::time::Duration::from_millis(20));
 
-        graphics::event_handling(event, control_flow, &mut graphics_state.egui_state, &mut ui_state);
+        graphics::event_handling(event, control_flow, &mut graphics_state, &mut ui_state);
 
         if ui_state.request_redraw > 0 {
             ui_state.request_redraw -= 1;
@@ -43,11 +43,11 @@ fn create_ui(ctx: &mut Context, dragon_view: &mut DragonView) {
 
 fn top_panel(ctx: &mut Context, dragon_view: &mut DragonView) {
     let top_frame = egui::containers::Frame {
-        inner_margin: egui::style::Margin { left: 10.0, right: 10.0, top: 6.0, bottom: 6.0 },
+        inner_margin: egui::style::Margin { left: 10.0, right: 10.0, top: 10.0, bottom: 10.0 },
         outer_margin: egui::style::Margin { left: 0.0, right: 0.0, top: 0.0, bottom: 0.0 },
         rounding: egui::Rounding::default(),
         shadow: egui::epaint::Shadow::default(),
-        fill: Color32::BLACK,
+        fill: Color32::from_rgb(0x1B, 0x1B, 0x1B),
         stroke: egui::Stroke::default(),
     };
 
@@ -78,11 +78,11 @@ fn top_panel(ctx: &mut Context, dragon_view: &mut DragonView) {
 
 fn side_panel(ctx: &mut Context, dragon_view: &mut DragonView) {
     egui::SidePanel::left("my_left_panel")
-    .min_width(210.0)
+    .min_width(240.0)
     .resizable(false)
     .show(ctx, |ui| {
         egui::ScrollArea::vertical()
-        .max_height(660.0)
+        .max_height(560.0)
         .show(ui, |ui| {
             for enemy in dragon_view::enemy::Enemy::list() {
                 let name = enemy.get_enemy().name;
@@ -109,11 +109,11 @@ fn side_panel(ctx: &mut Context, dragon_view: &mut DragonView) {
 
 fn central_panel(ctx: &mut Context, dragon_view: &mut DragonView) {
     let central_frame = egui::containers::Frame {
-        inner_margin: egui::style::Margin { left: 10.0, right: 10.0, top: 10.0, bottom: 10.0 },
+        inner_margin: egui::style::Margin { left: 20.0, right: 20.0, top: 20.0, bottom: 20.0 },
         outer_margin: egui::style::Margin { left: 0.0, right: 0.0, top: 0.0, bottom: 0.0 },
         rounding: egui::Rounding::default(),
         shadow: egui::epaint::Shadow::default(),
-        fill: Color32::from_rgb(0x30, 0x80, 0xA0),
+        fill: Color32::from_rgb(0x2B, 0x2B, 0x2B),
         stroke: egui::Stroke::default(),
     };
 
@@ -122,7 +122,7 @@ fn central_panel(ctx: &mut Context, dragon_view: &mut DragonView) {
     .show(ctx, |ui| {
         egui::Grid::new("dmg_grid").show(ui, |ui| {
             for (idx, (name, damage_list)) in dragon_view.damage_dealt().iter().enumerate() {
-                ui.colored_label(Color32::from_rgb(240, 240, 240), name);
+                ui.colored_label(Color32::from_rgb(204, 204, 204), name);
 
                 let hp = match dragon_view.is_boss {
                     true => 184,
@@ -131,11 +131,11 @@ fn central_panel(ctx: &mut Context, dragon_view: &mut DragonView) {
 
                 for (damage, zero_damage) in damage_list.iter() {
                     let color = if *zero_damage == true {
-                        Color32::LIGHT_RED
+                        Color32::RED
                     } else if *damage >= hp {
-                        Color32::LIGHT_GREEN
+                        Color32::GREEN
                     } else {
-                        Color32::from_rgb(240, 240, 240)
+                        Color32::from_rgb(204, 204, 204)
                     };
 
                     ui.colored_label(color, format!("{:3}", damage.clamp(&1, &hp)));
@@ -150,18 +150,20 @@ fn central_panel(ctx: &mut Context, dragon_view: &mut DragonView) {
         });
 
         ui.add_space(20.0);
-        ui.colored_label(Color32::from_rgb(240, 240, 240), format!("defense: {}", dragon_view.current_enemy.get_enemy().defense));
-        ui.colored_label(Color32::from_rgb(240, 240, 240), format!("xp: {}", dragon_view.current_enemy.get_enemy().xp));
+        ui.colored_label(Color32::from_rgb(204, 204, 204), format!("defense: {}", dragon_view.current_enemy.get_enemy().defense));
+        ui.colored_label(Color32::from_rgb(204, 204, 204), format!("xp: {}", dragon_view.current_enemy.get_enemy().xp));
     });
 }
 
 fn set_egui_visuals(ctx: &mut Context) {
     use egui::FontFamily::Proportional;
 
+    ctx.set_pixels_per_point(2.0);
+
     let mut visuals = egui::Visuals::default();
 
-    visuals.widgets.inactive.fg_stroke.color = Color32::from_rgb(240, 240, 240);
-    visuals.widgets.hovered.fg_stroke.color = Color32::from_rgb(240, 240, 240);
+    visuals.widgets.inactive.fg_stroke.color = Color32::from_rgb(204, 204, 204);
+    visuals.widgets.hovered.fg_stroke.color = Color32::from_rgb(204, 204, 204);
     ctx.set_visuals(visuals);
 
     let mut style = (*ctx.style()).clone();
