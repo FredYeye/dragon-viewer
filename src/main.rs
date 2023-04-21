@@ -82,7 +82,7 @@ fn side_panel(ctx: &mut Context, dragon_view: &mut DragonView) {
     .resizable(false)
     .show(ctx, |ui| {
         egui::ScrollArea::vertical()
-        .max_height(560.0)
+        .max_height(550.0)
         .show(ui, |ui| {
             for enemy in dragon_view::enemy::Enemy::list() {
                 let name = enemy.get_enemy().name;

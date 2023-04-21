@@ -195,6 +195,7 @@ pub fn event_handling(event: Event<()>, control_flow: &mut ControlFlow, graphics
                                     key,
                                     pressed,
                                     modifiers: graphics_state.egui_state.raw_input.modifiers,
+                                    repeat: false,
                                 }
                             );
                         }
